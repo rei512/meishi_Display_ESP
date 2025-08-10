@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pio run:*)",
+      "Bash(platformio run:*)",
+      "Bash(python -m platformio run -e esp32-c3-devkitm-1)",
+      "Bash(where platformio)",
+      "Bash(py --version)",
+      "Bash(C:/Users/rei_512_/AppData/Local/Microsoft/WindowsApps/python --version)",
+      "Bash(pip --version)",
+      "Bash(python -m pip show:*)",
+      "Bash(python:*)",
+      "Bash(timeout:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}

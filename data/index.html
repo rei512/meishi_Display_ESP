@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>画像表示システム</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #fff;
+            margin: 20px 0;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+        .card h1 {
+            font-size: 1.8em;
+            margin-bottom: 16px;
+            color: #333;
+            text-align: center;
+        }
+        .card h2 {
+            font-size: 1.4em;
+            margin-bottom: 16px;
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 8px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 16px 0;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .file-input {
+            display: none;
+        }
+        .upload-btn {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 8px;
+        }
+        .upload-btn:hover {
+            background: #0056b3;
+        }
+        .display-btn {
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 4px;
+        }
+        .display-btn:hover {
+            background: #1e7e34;
+        }
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 4px;
+        }
+        .delete-btn:hover {
+            background: #c82333;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #eee;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 16px 0;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .image-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .image-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .image-preview {
+            max-width: 100%;
+            max-height: 150px;
+            border-radius: 4px;
+        }
+        .image-info {
+            margin: 8px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin: 16px 0;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>ESP32 画像表示システム</h1>
+            
+            <h2>画像アップロード</h2>
+            <div class="upload-area" id="uploadArea">
+                <p>PNG/JPG画像をドラッグ&ドロップするか、クリックして選択してください<br>
+                   自動で240x320にフィットするよう調整されます</p>
+                <input type="file" id="fileInput" class="file-input" accept=".png,.jpg,.jpeg" />
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    ファイルを選択
+                </button>
+            </div>
+            
+            <div class="progress" id="progress">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            
+            <div class="status" id="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>保存された画像</h2>
+            <button class="upload-btn" onclick="loadImageList()">リストを更新</button>
+            <div class="image-list" id="imageList">
+                <!-- 画像リストがここに表示されます -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        const status = document.getElementById('status');
+        const imageList = document.getElementById('imageList');
+
+        // ドラッグ&ドロップ処理
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.type.includes('png') && !file.type.includes('jpeg') && !file.type.includes('jpg')) {
+                showStatus('PNG/JPG画像ファイルを選択してください', 'error');
+                return;
+            }
+
+            // 画像を処理してキャンバスで調整
+            processImage(file);
+        }
+
+        function processImage(file) {
+            const img = new Image();
+            img.onload = function() {
+                let sourceWidth = img.width;
+                let sourceHeight = img.height;
+                let targetWidth = 240;
+                let targetHeight = 320;
+                
+                // 240x320の場合は処理せずにそのままアップロード
+                if (sourceWidth === 240 && sourceHeight === 320) {
+                    console.log('Perfect size match: 240x320 - uploading without processing');
+                    showStatus('画像サイズが最適です（240x320）- 未処理でアップロード', 'success');
+                    uploadFile(file);
+                    return;
+                }
+                
+                // 320x240の場合は回転のみ
+                if (sourceWidth === 320 && sourceHeight === 240) {
+                    console.log('Exact landscape match: 320x240 - rotating only');
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // キャンバスを240x320に設定
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    
+                    // 90度回転して描画
+                    ctx.save();
+                    ctx.translate(targetWidth / 2, targetHeight / 2);
+                    ctx.rotate(Math.PI / 2); // 90度回転
+                    ctx.drawImage(img, -targetHeight / 2, -targetWidth / 2, targetHeight, targetWidth);
+                    ctx.restore();
+                    
+                    // JPG形式でBlobを生成
+                    canvas.toBlob(function(blob) {
+                        if (blob) {
+                            let newName = file.name.replace(/\.[^/.]+$/, '') + '_rotated.jpg';
+                            let processedFile = new File([blob], newName, { type: 'image/jpeg' });
+                            showStatus('画像を90度回転しました（320x240 → 240x320）', 'success');
+                            uploadFile(processedFile);
+                        } else {
+                            showStatus('画像の回転に失敗しました', 'error');
+                        }
+                    }, 'image/jpeg', 0.85);
+                    return;
+                }
+                
+                // その他のサイズは通常の処理
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 横長画像の場合は90度回転が必要かチェック
+                let shouldRotate = sourceWidth > sourceHeight;
+                let workingWidth = sourceWidth;
+                let workingHeight = sourceHeight;
+                
+                if (shouldRotate) {
+                    console.log('Rotating landscape image 90 degrees');
+                    // 回転後のサイズを考慮
+                    [workingWidth, workingHeight] = [sourceHeight, sourceWidth];
+                }
+                
+                // 画面に収まるようにスケーリング計算
+                let scaleX = targetWidth / workingWidth;
+                let scaleY = targetHeight / workingHeight;
+                let scale = Math.min(scaleX, scaleY); // 縦横比を保持してフィット
+                
+                let drawWidth = workingWidth * scale;
+                let drawHeight = workingHeight * scale;
+                
+                // 中央に配置するためのオフセット
+                let offsetX = (targetWidth - drawWidth) / 2;
+                let offsetY = (targetHeight - drawHeight) / 2;
+                
+                console.log(`Original: ${img.width}x${img.height}, Target: ${targetWidth}x${targetHeight}`);
+                console.log(`Scale: ${scale}, Draw size: ${drawWidth}x${drawHeight}, Offset: ${offsetX},${offsetY}`);
+                
+                // キャンバスを240x320に設定
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                
+                // 背景を黒で塗りつぶし
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, targetWidth, targetHeight);
+                
+                // 画像を描画
+                if (shouldRotate) {
+                    // 回転して描画
+                    ctx.save();
+                    ctx.translate(targetWidth / 2, targetHeight / 2);
+                    ctx.rotate(Math.PI / 2); // 90度回転
+                    ctx.drawImage(img, 
+                                 -drawHeight / 2, -drawWidth / 2,  // 回転考慮した中央配置
+                                 drawHeight, drawWidth);           // 回転後のサイズ
+                    ctx.restore();
+                } else {
+                    // 通常の描画
+                    ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                }
+                
+                // JPG形式でBlobを生成してアップロード
+                canvas.toBlob(function(blob) {
+                    if (blob) {
+                        // 新しいファイル名を生成（JPG形式）
+                        let newName = file.name.replace(/\.[^/.]+$/, '') + '_processed.jpg';
+                        let processedFile = new File([blob], newName, { type: 'image/jpeg' });
+                        
+                        showStatus(`画像を処理しました (${img.width}x${img.height} → ${targetWidth}x${targetHeight})`, 'success');
+                        uploadFile(processedFile);
+                    } else {
+                        showStatus('画像の処理に失敗しました', 'error');
+                    }
+                }, 'image/jpeg', 0.85); // JPG品質85%
+            };
+            
+            img.onerror = function() {
+                showStatus('画像の読み込みに失敗しました', 'error');
+            };
+            
+            img.src = URL.createObjectURL(file);
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('image', file);
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    progress.style.display = 'block';
+                    progressBar.style.width = percentComplete + '%';
+                }
+            };
+
+            xhr.onload = () => {
+                progress.style.display = 'none';
+                progressBar.style.width = '0%';
+                
+                if (xhr.status === 200) {
+                    showStatus('画像がアップロードされました！', 'success');
+                    loadImageList();
+                } else {
+                    showStatus('アップロードに失敗しました', 'error');
+                }
+            };
+
+            xhr.onerror = () => {
+                progress.style.display = 'none';
+                showStatus('アップロードエラーが発生しました', 'error');
+            };
+
+            xhr.open('POST', '/upload');
+            xhr.send(formData);
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+
+        function loadImageList() {
+            fetch('/images')
+                .then(response => response.json())
+                .then(data => {
+                    displayImages(data.images);
+                })
+                .catch(error => {
+                    console.error('Error loading images:', error);
+                    showStatus('画像リストの読み込みに失敗しました', 'error');
+                });
+        }
+
+        function displayImages(images) {
+            imageList.innerHTML = '';
+            images.forEach(image => {
+                const item = document.createElement('div');
+                item.className = 'image-item';
+                item.innerHTML = `
+                    <img src="/image/${image.name}" alt="${image.name}" class="image-preview" />
+                    <div class="image-info">
+                        <div>${image.name}</div>
+                        <div>${(image.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                    <button class="display-btn" onclick="displayImage('${image.name}')">表示</button>
+                    <button class="delete-btn" onclick="deleteImage('${image.name}')">削除</button>
+                `;
+                imageList.appendChild(item);
+            });
+        }
+
+        function displayImage(filename) {
+            fetch(`/display/${filename}`, { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        showStatus(`${filename} を表示しています`, 'success');
+                    } else {
+                        showStatus('表示に失敗しました', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error displaying image:', error);
+                    showStatus('表示エラーが発生しました', 'error');
+                });
+        }
+
+        function deleteImage(filename) {
+            if (confirm(`${filename} を削除しますか？`)) {
+                fetch(`/delete/${filename}`, { method: 'DELETE' })
+                    .then(response => {
+                        if (response.ok) {
+                            showStatus(`${filename} を削除しました`, 'success');
+                            loadImageList();
+                        } else {
+                            showStatus('削除に失敗しました', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error deleting image:', error);
+                        showStatus('削除エラーが発生しました', 'error');
+                    });
+            }
+        }
+
+        // ページ読み込み時に画像リストを取得
+        window.onload = () => {
+            loadImageList();
+        };
+    </script>
+</body>
+</html>

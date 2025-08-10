@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<link rel='icon' href='/update/favicon.ico' sizes='any'>
+<title>Firmware Update</title>
+</head>
+
+<body style='width:480px'>
+  <h2>Firmware Update</h2>
+  firmware.binかlittlefs.binを選択してください。<br>
+  ファームウェアのアップデートは再起動後有効となります。<br>
+<form method='POST' enctype='multipart/form-data' id='upload-form'>
+<input type='file' id='file' name='update' accept='.bin'>
+<input type='submit' value='Update'>
+</form>
+<button id='reboot-btn'>Reboot</button>
+  <br>
+  <div id='prg' style='width:0;color:white;text-align:center'>0%</div>
+  <br>
+  <a href='/'>Back</a>
+  <br>
+  <br>
+
+<label for="fan-speed">Fan Speed:</label>
+<input type="range" id="fan-speed" name="fan-speed" min="0" max="100" value="0">
+<span id="fan-speed-value">0</span>
+
+<script>
+	const fanSpeedInput = document.getElementById('fan-speed');
+	const fanSpeedValue = document.getElementById('fan-speed-value');
+
+	fanSpeedInput.addEventListener('input', () => {
+		fanSpeedValue.textContent = fanSpeedInput.value;
+
+		const req = new XMLHttpRequest();
+		req.open('POST', '/fan');
+		req.setRequestHeader('Content-Type', 'application/json');
+		req.send(fanSpeedInput.value);
+	});
+</script>
+</body>
+
+<script>
+document.getElementById('reboot-btn').addEventListener('click', () => {
+		if (confirm('Are you sure you want to reboot?')) {
+			var req = new XMLHttpRequest();
+			req.open('GET', '/reboot');
+			req.send();
+			req.onreadystatechange = function() {
+				if (req.readyState == 4 && req.status == 200) {
+					
+				}
+			};
+		}
+	});
+	
+
+  var prg = document.getElementById('prg');
+  var form = document.getElementById('upload-form');
+  form.addEventListener('submit', el=>{
+	prg.style.backgroundColor = 'blue';
+	el.preventDefault();
+	var data = new FormData(form);
+	var req = new XMLHttpRequest();
+	var fsize = document.getElementById('file').files[0].size;
+	req.open('POST', '/update/file?size=' + fsize);
+	req.upload.addEventListener('progress', p=>{
+	  let w = Math.round(p.loaded/p.total*100) + '%';
+		if(p.lengthComputable){
+		   prg.innerHTML = w;
+		   prg.style.width = w;
+		}
+		if(w == '100%') prg.style.backgroundColor = 'black';
+	});
+	req.send(data);
+req.onreadystatechange = function() {
+  if (req.readyState == 4) {
+	if (req.status == 200) {
+	  prg.innerHTML = 'Update successful!';
+	  prg.style.backgroundColor = 'green';
+	} else {
+	  prg.innerHTML = 'Update failed!';
+	  prg.style.backgroundColor = 'red';
+	}
+  }
+};
+   });
+</script>
